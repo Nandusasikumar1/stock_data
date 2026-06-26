@@ -1,101 +1,119 @@
 import requests
 from datetime import datetime, timedelta
 from apscheduler.schedulers.blocking import BlockingScheduler
-
+import os
 # =========================
 # SLACK CONFIG
 # =========================
-import os
 
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_MEMBER_ID = os.getenv("SLACK_MEMBER_ID")
+
 # =========================
 # JOB
 # =========================
 def check_nse_orders():
+    try:
+        # NSE often requires a warm-up request to obtain cookies
+        session = requests.Session()
+        session.trust_env = False
 
-    # NSE often requires a warm-up request to obtain cookies
-    session = requests.Session()
-    session.trust_env = False
-
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/137.0.0.0 Safari/537.36"
-        ),
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.nseindia.com/",
-    }
-
-    # Get today's and yesterday's dates
-    today = datetime.now()
-    yesterday = today - timedelta(days=1)
-
-    from_date = yesterday.strftime("%d-%m-%Y")
-    to_date = today.strftime("%d-%m-%Y")
-
-    # Warm up session (important for NSE)
-    session.get(
-        "https://www.nseindia.com",
-        headers=headers,
-        timeout=30,
-    )
-
-    url = (
-        "https://www.nseindia.com/api/corporate-announcements"
-        f"?index=equities"
-        f"&from_date={from_date}"
-        f"&to_date={to_date}"
-        f"&reqXbrl=false"
-    )
-
-    response = session.get(
-        url,
-        headers=headers,
-        timeout=30,
-    )
-
-    response.raise_for_status()
-
-    data = response.json()
-    data_requried = []
-    for i in data:
-        if i.get('desc',None) == "Bagging/Receiving of orders/contracts":
-            data_requried.append(i['sm_name']+' : '+i['attchmntFile'])
-    
-    
-    if data_requried :
-        data_requried = '\n\n'.join(data_requried)
-        slack_headers = {
-            "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
-            "Content-Type": "application/json",
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/137.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.nseindia.com/",
         }
 
-        payload = {
-            "channel": SLACK_MEMBER_ID,
-            "text": data_requried,  # Slack limit safety
-        }
+        today = datetime.now()
+        yesterday = today - timedelta(days=1)
 
-        slack_response = requests.post(
-            "https://slack.com/api/chat.postMessage",
-            headers=slack_headers,
-            json=payload,
+        from_date = yesterday.strftime("%d-%m-%Y")
+        to_date = today.strftime("%d-%m-%Y")
+
+        # Warm-up request
+        session.get(
+            "https://www.nseindia.com",
+            headers=headers,
             timeout=30,
         )
 
-        print(slack_response.json())
+        url = (
+            "https://www.nseindia.com/api/corporate-announcements"
+            f"?index=equities"
+            f"&from_date={from_date}"
+            f"&to_date={to_date}"
+            f"&reqXbrl=false"
+        )
 
-    print(f"Checked at {datetime.now()}")
+        response = session.get(
+            url,
+            headers=headers,
+            timeout=30,
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        data_required = []
+
+        for i in data:
+            if i.get("desc") == "Bagging/Receiving of orders/contracts":
+                data_required.append(
+                    f"{i['sm_name']} : {i['attchmntFile']}"
+                )
+
+        if data_required:
+            message = "\n\n".join(data_required)
+
+            slack_headers = {
+                "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+                "Content-Type": "application/json",
+            }
+
+            payload = {
+                "channel": SLACK_MEMBER_ID,
+                "text": message,
+            }
+
+            slack_response = requests.post(
+                "https://slack.com/api/chat.postMessage",
+                headers=slack_headers,
+                json=payload,
+                timeout=30,
+            )
+
+            print(slack_response.json())
+
+        print(f"Checked at {datetime.now()}")
+
+    except Exception as e:
+        print(f"Error: {e}")
 
 
 # =========================
 # SCHEDULER
 # =========================
 
+scheduler = BlockingScheduler()
 
+# Run every 5 minutes
+scheduler.add_job(
+    check_nse_orders,
+    trigger="interval",
+    minutes=60,
+    id="nse_orders_job",
+    replace_existing=True,
+)
+
+# Run once immediately
 check_nse_orders()
 
+print("NSE Order Monitor Started...")
 
-
+scheduler.start()
