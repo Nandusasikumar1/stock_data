@@ -1,0 +1,32 @@
+name: NSE Order Monitor
+
+on:
+  schedule:
+    # Run every hour
+    - cron: "0 * * * *"
+
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run NSE Bot
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_MEMBER_ID: ${{ secrets.SLACK_MEMBER_ID }}
+        run: |
+          python test.py
