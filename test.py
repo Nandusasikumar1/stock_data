@@ -5,9 +5,10 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 # =========================
 # SLACK CONFIG
 # =========================
-SLACK_BOT_TOKEN = "xoxb-11404948540579-11409329819254-0EMLmeeIoCW5VNXBlbPMhCMn"
-SLACK_MEMBER_ID = "U0BC6TK1G04"  # User ID
+import os
 
+SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
+SLACK_MEMBER_ID = os.getenv("SLACK_MEMBER_ID")
 # =========================
 # JOB
 # =========================
