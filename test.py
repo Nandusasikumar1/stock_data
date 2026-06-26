@@ -1,6 +1,5 @@
 import requests
 from datetime import datetime, timedelta
-from apscheduler.schedulers.blocking import BlockingScheduler
 import os
 # =========================
 # SLACK CONFIG
@@ -100,20 +99,11 @@ def check_nse_orders():
 # SCHEDULER
 # =========================
 
-scheduler = BlockingScheduler()
+
 
 # Run every 5 minutes
-scheduler.add_job(
-    check_nse_orders,
-    trigger="interval",
-    minutes=60,
-    id="nse_orders_job",
-    replace_existing=True,
-)
 
 # Run once immediately
 check_nse_orders()
 
 print("NSE Order Monitor Started...")
-
-scheduler.start()
